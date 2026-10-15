@@ -11,6 +11,6 @@ OUTPUT_DIR     = os.path.join(BASE_DIR, "output")
 LOG_FILE       = os.path.join(OUTPUT_DIR, "attendance_log.csv")
 
 CAMERA_INDEX       = 0
-CONFIDENCE_THRESH  = 60      # lower = stricter
+CONFIDENCE_THRESH  = 110     # lower = stricter; 100-110 is optimal for webcam LBPH
 FACE_SIZE          = (200, 200)
 SAMPLES_PER_PERSON = 30

@@ -1,3 +1,7 @@
 opencv-contrib-python==4.9.0.80
 numpy==1.26.4
+pandas>=2.0.0
 Pillow==10.3.0
+streamlit>=1.32.0
+streamlit-webrtc>=0.47.1
+av>=11.0.0
