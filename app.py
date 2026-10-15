@@ -10,6 +10,7 @@ import threading
 import av
 import cv2
 import numpy as np
+import requests
 import streamlit as st
 from streamlit_webrtc import VideoProcessorBase, webrtc_streamer, WebRtcMode
 
@@ -28,6 +29,47 @@ from src.utils import ensure_cascade
 # ── Ensure cascade XML is present before anything else ──────────────────────
 ensure_cascade()
 
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def build_rtc_configuration():
+    ice_servers = [{"urls": ["stun:stun.l.google.com:19302"]}]
+    cloudflare_key_id = os.getenv("CLOUDFLARE_TURN_KEY_ID", "").strip()
+    cloudflare_api_token = os.getenv("CLOUDFLARE_TURN_KEY_API_TOKEN", "").strip()
+
+    if cloudflare_key_id and cloudflare_api_token:
+        try:
+            response = requests.post(
+                "https://rtc.live.cloudflare.com/v1/turn/keys/"
+                f"{cloudflare_key_id}/credentials/generate-ice-servers",
+                headers={"Authorization": f"Bearer {cloudflare_api_token}"},
+                json={"ttl": 7200},
+                timeout=10,
+            )
+            response.raise_for_status()
+            cloudflare_servers = response.json().get("iceServers", [])
+            if cloudflare_servers:
+                return {"iceServers": cloudflare_servers}
+        except (requests.RequestException, ValueError) as exc:
+            print(f"[WARNING] Could not load Cloudflare TURN servers: {exc}")
+
+    turn_urls = [
+        url.strip()
+        for url in os.getenv("TURN_SERVER_URLS", "").split(",")
+        if url.strip()
+    ]
+    turn_username = os.getenv("TURN_USERNAME", "").strip()
+    turn_credential = os.getenv("TURN_CREDENTIAL", "").strip()
+
+    if turn_urls and turn_username and turn_credential:
+        ice_servers.append({
+            "urls": turn_urls,
+            "username": turn_username,
+            "credential": turn_credential,
+        })
+
+    return {"iceServers": ice_servers}
+
+
 # ════════════════════════════════════════════════════════════════════════════
 #  Page config
 # ════════════════════════════════════════════════════════════════════════════
@@ -37,6 +79,8 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+RTC_CONFIGURATION = build_rtc_configuration()
 
 # ════════════════════════════════════════════════════════════════════════════
 #  CSS – premium dark theme
@@ -426,6 +470,7 @@ elif page == "📷 Register Student":
         ctx = webrtc_streamer(
             key="capture",
             mode=WebRtcMode.SENDRECV,
+            rtc_configuration=RTC_CONFIGURATION,
             video_processor_factory=CaptureProcessor,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
@@ -523,6 +568,7 @@ elif page == "🔍 Recognize Face":
         webrtc_streamer(
             key="recognize",
             mode=WebRtcMode.SENDRECV,
+            rtc_configuration=RTC_CONFIGURATION,
             video_processor_factory=RecognizeProcessor,
             media_stream_constraints={"video": True, "audio": False},
             async_processing=True,
